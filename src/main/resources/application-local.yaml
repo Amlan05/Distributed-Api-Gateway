@@ -1,0 +1,16 @@
+spring:
+  config:
+    import: "configtree:./.secrets/"
+
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5433/gateway_users
+    username: gateway
+    password: "${postgres_password.txt}"
+
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+  flyway:
+    enabled: false
