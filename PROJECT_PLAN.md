@@ -1,6 +1,6 @@
 # Distributed API Gateway project plan
 
-Build a portfolio system incrementally, with reproducible tests, intentional failure handling, observability, and measured performance. Milestone 1 is complete and Milestone 2 is authorized. The user requested Hibernate-managed local schema generation instead of SQL migrations for this phase.
+Build a portfolio system incrementally, with reproducible tests, intentional failure handling, observability, and measured performance. Milestones 1 and 2 are implemented; the user reported successful manual persistence checks and approved Milestone 3. The existing User application now lives in user-service/. The user requested Hibernate-managed local schema generation instead of SQL migrations for this phase.
 
 ## Target architecture
 

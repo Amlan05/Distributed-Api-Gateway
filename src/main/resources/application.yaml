@@ -1,8 +1,0 @@
-spring:
-  application:
-    name: distributed-api-gateway
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false

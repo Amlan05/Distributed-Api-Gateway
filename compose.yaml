@@ -18,6 +18,18 @@ services:
       timeout: 5s
       retries: 10
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: gateway-keycloak
+    command: [ "start-dev" ]
+    env_file:
+      - ./.secrets/keycloak.env
+    ports:
+      - "127.0.0.1:8090:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+
+
 secrets:
   postgres_password:
     file: ./.secrets/postgres_password.txt
@@ -25,3 +37,6 @@ secrets:
 volumes:
   postgres-data:
     name: gateway-postgres-data
+  keycloak-data:
+    name: gateway-keycloak-data
+

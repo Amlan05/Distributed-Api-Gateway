@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          default-filters:
+            - PreserveHostHeader
+          routes:
+            - id: user-service
+              uri: ${USER_SERVICE_URL:http://127.0.0.1:8081}
+              predicates:
+                - Path=/api/users,/api/users/**
+
+            - id: product-service
+              uri: ${PRODUCT_SERVICE_URL:http://127.0.0.1:8082}
+              predicates:
+                - Path=/api/products,/api/products/**
+
+            - id: order-service
+              uri: ${ORDER_SERVICE_URL:http://127.0.0.1:8083}
+              predicates:
+                - Path=/api/orders,/api/orders/**
+
+server:
+  port: 8080
+  address: 127.0.0.1

@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: order-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+server:
+  port: 8083
+  address: 127.0.0.1

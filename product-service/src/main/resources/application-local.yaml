@@ -1,0 +1,12 @@
+spring:
+  config:
+    import: "configtree:./.secrets/"
+
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5433/gateway_products
+    username: product_app
+    password: "${product_password.txt}"
+
+  jpa:
+    hibernate:
+      ddl-auto: update

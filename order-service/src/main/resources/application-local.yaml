@@ -1,0 +1,18 @@
+spring:
+  config:
+    import: "configtree:./.secrets/"
+
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5433/gateway_orders
+    username: order_app
+    password: "${order_password.txt}"
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+clients:
+  user:
+    base-url: http://127.0.0.1:8081
+  product:
+    base-url: http://127.0.0.1:8082

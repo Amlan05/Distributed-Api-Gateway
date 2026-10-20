@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: user-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+server:
+  port: 8081
+  address: 127.0.0.1
