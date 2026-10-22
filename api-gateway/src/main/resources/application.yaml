@@ -2,6 +2,17 @@ spring:
   application:
     name: api-gateway
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8091
+          jwk-set-uri: http://127.0.0.1:8091/.well-known/jwks.json
+          audiences:
+            - gateway-api
+          jws-algorithms:
+            - RS256
+
   cloud:
     gateway:
       server:
@@ -9,20 +20,55 @@ spring:
           default-filters:
             - PreserveHostHeader
           routes:
+            - id: auth-service
+              uri: ${AUTH_SERVICE_URL:http://127.0.0.1:8091}
+              predicates:
+                - Path=/api/auth/register,/api/auth/login
+
             - id: user-service
               uri: ${USER_SERVICE_URL:http://127.0.0.1:8081}
               predicates:
                 - Path=/api/users,/api/users/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@accountKeyResolver}"
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+                    redis-rate-limiter.requestedTokens: 1
 
             - id: product-service
               uri: ${PRODUCT_SERVICE_URL:http://127.0.0.1:8082}
               predicates:
                 - Path=/api/products,/api/products/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@accountKeyResolver}"
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+                    redis-rate-limiter.requestedTokens: 1
+
 
             - id: order-service
               uri: ${ORDER_SERVICE_URL:http://127.0.0.1:8083}
               predicates:
                 - Path=/api/orders,/api/orders/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@accountKeyResolver}"
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+                    redis-rate-limiter.requestedTokens: 1
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+      connect-timeout: 2s
+      timeout: 1s
+
 
 server:
   port: 8080

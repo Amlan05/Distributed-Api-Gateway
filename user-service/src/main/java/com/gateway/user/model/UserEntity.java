@@ -21,13 +21,26 @@ public class UserEntity {
     @Column(nullable = false, length = 254)
     private String email;
 
+    // Nullable only for profiles created before account ownership was introduced.
+    @Column(name = "owner_subject", unique = true, length = 100, updatable = false)
+    private String ownerSubject;
+
+    public String getOwnerSubject() {
+        return ownerSubject;
+    }
+
     protected UserEntity() {
     }
 
 
     public UserEntity(String name, String email) {
+        this(name, email, null);
+    }
+
+    public UserEntity(String name, String email, String ownerSubject) {
         this.name = name;
         this.email = email;
+        this.ownerSubject = ownerSubject;
     }
 
     public Long getId() {

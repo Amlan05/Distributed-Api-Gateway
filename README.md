@@ -1,149 +1,135 @@
-# Distributed API Gateway — User API
+# Distributed API Gateway
 
-The User service in `user-service/` hosts a user-management REST API backed by PostgreSQL, with Spring Data JPA and isolated database tests. Separate Product and Order services are the approved next milestone; gateway routing remains future work. Java 17 and Spring Boot 4.1.1 are preserved.
+A Java backend system with five independently running applications, JWT authentication, service-level authorization and Redis-backed distributed rate limiting.
 
-## Package structure
+**Stack:** Java 17, Spring Boot 4.1.1, Spring Cloud Gateway 5.0.3, Spring Security, PostgreSQL 17.11, Spring Data JPA, Redis 8.2.10, Docker Compose and Maven.
+
+## Architecture
 
 ```text
-com.gateway
-├── DistributedApiGatewayApplication.java
-├── user
-│   ├── controller
-│   │   └── UserController.java
-│   ├── service
-│   │   └── UserService.java
-│   ├── repository
-│   │   ├── UserRepository.java
-│   │   └── UserJpaRepository.java
-│   ├── model
-│   │   ├── User.java
-│   │   └── UserEntity.java
-│   ├── dto
-│   │   ├── UserRequest.java
-│   │   └── UserResponse.java
-│   └── exception
-│       └── UserNotFoundException.java
-└── shared
-    └── exception
-        └── GlobalExceptionHandler.java
+Client -> API Gateway :8080
+           |-- Auth service    :8091 -> gateway_auth
+           |-- User service    :8081 -> gateway_users
+           |-- Product service :8082 -> gateway_products
+           `-- Order service   :8083 -> gateway_orders
+                 |-- authenticated User lookup
+                 `-- authenticated Product lookup
+
+Gateway instances -> Redis :6380 -> shared rate-limit state
+Business services -> Auth service JWKS -> JWT signature verification
 ```
 
-Packages group classes by feature, then responsibility. The request flow remains Controller -> Service -> Repository. Tests mirror the user feature's layer packages, with the full API lifecycle test in com.gateway.user.integration. Shared HTTP exception handling lives in shared.exception; user-specific exceptions live in user.exception.
+The four services own separate PostgreSQL databases hosted in one local PostgreSQL container. The reactive gateway runs separately from the Spring MVC services. Packages group code by feature and responsibility; request/response DTOs separate HTTP contracts from persistence entities.
 
-## Run on Windows
+## Features
 
-Keep Docker Desktop running. Tests start disposable PostgreSQL containers through Testcontainers; they do not require the local development password or PostgreSQL Compose service. In PowerShell, from this project directory:
+- RSA-signed JWT access tokens with a 15-minute lifetime, BCrypt password hashing and public-key distribution through JWKS.
+- Independent signature, algorithm, issuer, audience and timestamp validation at the gateway and all business services.
+- USER/ADMIN authorization, account-owned user profiles and creator-owned orders. Authentication account IDs and user profile IDs are independent.
+- Redis token-bucket limits per account and route: 5 tokens replenished per second, 10-token burst capacity and one token per request. Gateway replicas share bucket state through atomic Redis scripts.
+- HTTP 429 responses with rate-limit metadata and a filter for calculated Retry-After guidance.
+- Product CRUD and order creation with purchase-time price snapshots, validated inputs and authenticated downstream calls.
+- Transactional persistence, row locking for User/Product updates and deletes, bounded downstream connection/read timeouts and sanitized ProblemDetail errors.
 
-```powershell
-# Use your installed Java 17 JDK (adjust only if your installation moves).
-$env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot'
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-java -version
-.\user-service\mvnw.cmd -f .\user-service\pom.xml -B clean verify
+### Access policy
 
-# Start the local development database, then the application.
-docker compose up -d --wait postgres
-java -Duser.timezone=Asia/Kolkata -jar .\user-service\target\distributed-api-gateway-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
-```
-
-The Maven wrapper supplies Maven; no global mvn installation is needed. The first build may download Maven/dependencies and Docker test images. Local startup requires the ignored .secrets/postgres_password.txt used by compose.yaml. application-local.yaml imports that directory using configtree; keep the run working directory at the project root. Do not commit the password file.
-
-IntelliJ can run DistributedApiGatewayApplication using temurin-17. Set the working directory explicitly to the repository root (the directory containing compose.yaml and .secrets), even when opening user-service as a separate IntelliJ project. Set VM options to -Duser.timezone=Asia/Kolkata and program arguments to --spring.profiles.active=local. The User service binds to 127.0.0.1:8081. Maven tests receive UTC through Surefire configuration. When running database tests directly with IntelliJ's JUnit runner, give that test run configuration VM options -Duser.timezone=UTC as well.
-
-If 8081 is already occupied, stop your existing application yourself or choose another free port, for example 8084:
-
-```powershell
-java -Duser.timezone=Asia/Kolkata -jar .\user-service\target\distributed-api-gateway-0.0.1-SNAPSHOT.jar --spring.profiles.active=local --server.port=8084
-```
-
-After building, the packaged application can also run directly:
-
-```powershell
-java -Duser.timezone=Asia/Kolkata -jar .\user-service\target\distributed-api-gateway-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
-```
-
-## Test every endpoint with PowerShell
-
-Leave the application running and open a second PowerShell terminal. These commands work with Windows PowerShell 5.1 and PowerShell 7. Use the application's port. PostgreSQL retains existing data across application restarts; use the returned id rather than assuming 1.
-
-```powershell
-$base = 'http://127.0.0.1:8081' # Adjust if you override server.port.
-
-# GET collection: 200, possibly containing users from earlier runs.
-Invoke-RestMethod -Method Get -Uri "$base/api/users"
-
-# POST: 201 with JSON body and Location header.
-$body = @{ name = 'Asha'; email = 'asha@example.com' } | ConvertTo-Json
-$created = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$base/api/users" `
-    -ContentType 'application/json' -Body $body
-$created.StatusCode
-$created.Headers['Location']
-$user = $created.Content | ConvertFrom-Json
-$userId = $user.id
-$user
-
-# GET by id: 200 with the created user.
-Invoke-RestMethod -Method Get -Uri "$base/api/users/$userId"
-
-# GET collection: includes the new user.
-Invoke-RestMethod -Method Get -Uri "$base/api/users"
-
-# PUT: 200, both name and email replaced, id unchanged.
-$updatedBody = @{ name = 'Asha Rao'; email = 'rao@example.com' } | ConvertTo-Json
-Invoke-RestMethod -Method Put -Uri "$base/api/users/$userId" `
-    -ContentType 'application/json' -Body $updatedBody
-Invoke-RestMethod -Method Get -Uri "$base/api/users/$userId"
-
-# DELETE: 204 and no response body.
-$deleted = Invoke-WebRequest -UseBasicParsing -Method Delete -Uri "$base/api/users/$userId"
-$deleted.StatusCode
-$deleted.Content
-```
-
-Expected failures throw in PowerShell. This helper prints the status and JSON error details without aborting the remaining examples:
-
-```powershell
-function Show-ApiError {
-    param([scriptblock]$Request)
-    try { & $Request }
-    catch {
-        if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode }
-        if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message }
-        else { $_.Exception.Message }
-    }
-}
-
-# Missing user after deletion: each is 404.
-Show-ApiError { Invoke-RestMethod -Method Get -Uri "$base/api/users/$userId" }
-Show-ApiError { Invoke-RestMethod -Method Put -Uri "$base/api/users/$userId" `
-    -ContentType 'application/json' -Body $updatedBody }
-Show-ApiError { Invoke-RestMethod -Method Delete -Uri "$base/api/users/$userId" }
-
-# Invalid fields: 400 with errors.name and errors.email.
-$invalid = @{ name = ''; email = 'not-an-email' } | ConvertTo-Json
-Show-ApiError { Invoke-RestMethod -Method Post -Uri "$base/api/users" `
-    -ContentType 'application/json' -Body $invalid }
-
-# Invalid id: 400.
-Show-ApiError { Invoke-RestMethod -Method Get -Uri "$base/api/users/0" }
-
-# Malformed JSON: 400.
-Show-ApiError { Invoke-RestMethod -Method Post -Uri "$base/api/users" `
-    -ContentType 'application/json' -Body '{broken' }
-```
-
-## Contract
-
-| Method and path | Success | Missing user |
+| API | USER | ADMIN |
 | --- | --- | --- |
-| GET /api/users | 200, JSON array sorted by id | Not applicable |
-| GET /api/users/{id} | 200, user | 404 |
-| POST /api/users | 201, user and Location | Not applicable |
-| PUT /api/users/{id} | 200, user | 404; no upsert |
-| DELETE /api/users/{id} | 204, empty body | 404 |
+| POST /api/auth/register, POST /api/auth/login | Public; registration assigns USER | Public |
+| GET /api/products and /api/products/{id} | Allowed | Allowed |
+| POST/PUT/DELETE products | Forbidden | Allowed |
+| POST /api/users | One account-owned profile | Unowned managed profiles |
+| GET /api/users | Forbidden | All profiles |
+| GET/PUT/DELETE /api/users/{id} | Own profile | Any profile |
+| POST /api/orders | Own profile and existing product | Any existing profile |
+| GET orders, including by id | Own orders | All orders |
 
-POST/PUT input: name (required, nonblank, <=100 characters) and email (required, nonblank, valid syntax, <=254 characters). Ids are positive Long values assigned by the server. Invalid input returns 400; unsupported HTTP methods/media types retain 405/415. Errors use application/problem+json; validation adds an errors map. Email uniqueness is not enforced yet.
+Missing or invalid authentication returns 401; forbidden operations return 403. Other accounts' profiles/orders are hidden with 404. Legacy rows without an owner remain administrator-only. Order ownership records the caller that created the order, including administrator-created orders.
 
-The repository delegates to PostgreSQL through Spring Data JPA. Update/delete use transactional row locking; concurrent replacements remain last-writer-wins. The local profile uses Hibernate ddl-auto=update with Flyway disabled, as requested. The test profile uses create-drop only against disposable Testcontainers databases, with cleanup between repository tests.
+The gateway's rate limiter currently fails open during Redis outages: authenticated requests proceed without quota enforcement and report `X-RateLimit-Remaining: -1`. Authentication and service authorization remain enforced. Public authentication endpoints are outside the account-based rate limiter. Services and infrastructure are configured for local loopback access.
 
-No authentication is implemented yet; use synthetic data locally. See PROJECT_PLAN.md for the future architecture. The user has reported successful manual CRUD and application-restart persistence checks. Milestone 3 is approved; the existing application has been moved into user-service before adding the Product and Order applications.
+## Local configuration
+
+**Prerequisites:** Java 17 and Docker Desktop. Run application processes from the repository root.
+
+Store local secrets in the ignored `.secrets/` directory:
+
+| File | Configuration |
+| --- | --- |
+| postgres_password.txt | PostgreSQL initial `gateway` role |
+| product_password.txt | `product_app` role |
+| order_password.txt | `order_app` role |
+| auth_password.txt | `auth_app` role |
+| auth_keystore_password.txt | PKCS12 signing-keystore password |
+| auth-signing.p12 | RSA signing key, alias `auth-signing` |
+
+```powershell
+docker compose up -d --wait postgres redis
+docker compose exec postgres psql -U gateway -d gateway_users
+```
+
+Compose initializes `gateway_users`. On a fresh database, provision the other service databases in psql, entering passwords matching the corresponding secret files:
+
+```sql
+CREATE ROLE product_app LOGIN;
+\password product_app
+CREATE DATABASE gateway_products OWNER product_app;
+CREATE ROLE order_app LOGIN;
+\password order_app
+CREATE DATABASE gateway_orders OWNER order_app;
+CREATE ROLE auth_app LOGIN;
+\password auth_app
+CREATE DATABASE gateway_auth OWNER auth_app;
+\q
+```
+
+Create the signing keystore once, using the password file above:
+
+```powershell
+keytool -genkeypair -alias auth-signing -keyalg RSA -keysize 3072 -sigalg SHA256withRSA -validity 365 -storetype PKCS12 -keystore .secrets/auth-signing.p12 -storepass:file .secrets/auth_keystore_password.txt -keypass:file .secrets/auth_keystore_password.txt -dname "CN=Gateway Auth"
+```
+
+Do not recreate existing roles/databases or overwrite an existing signing key. PostgreSQL and Redis are exposed on `127.0.0.1:5433` and `127.0.0.1:6380`. PostgreSQL uses a persistent volume; Redis rate-limit state is ephemeral. Application configuration imports `configtree:./.secrets/`. The local profile uses Hibernate `ddl-auto=update`; common database configuration uses `validate`.
+
+## Build and run
+
+Each application has its own Maven project. Packaging commands below skip automated test execution:
+
+```powershell
+foreach ($service in 'auth-service', 'user-service', 'product-service', 'order-service', 'api-gateway') {
+    & ".\$service\mvnw.cmd" -f ".\$service\pom.xml" -B package -DskipTests
+    if ($LASTEXITCODE -ne 0) { throw "Build failed: $service" }
+}
+```
+
+Run each application in a separate terminal from the repository root:
+
+```powershell
+java -Duser.timezone=UTC -jar auth-service/target/auth-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+java -Duser.timezone=UTC -jar user-service/target/distributed-api-gateway-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+java -Duser.timezone=UTC -jar product-service/target/product-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+java -Duser.timezone=UTC -jar order-service/target/order-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+java -Duser.timezone=UTC -jar api-gateway/target/api-gateway-0.0.1-SNAPSHOT.jar
+```
+
+A second gateway can run with `--server.port=8084`. Gateway targets accept `AUTH_SERVICE_URL`, `USER_SERVICE_URL`, `PRODUCT_SERVICE_URL` and `ORDER_SERVICE_URL`. Order clients use `clients.user.base-url` and `clients.product.base-url`.
+
+The default JWT issuer is `http://localhost:8091`, audience is `gateway-api`, and public JWKS endpoint is `http://127.0.0.1:8091/.well-known/jwks.json`. Register and log in through `/api/auth/register` and `/api/auth/login`; send the returned `accessToken` as `Authorization: Bearer <token>` on protected requests. User profiles are created separately through `/api/users`.
+
+For local administrator provisioning, place a password in `.secrets/admin_password.txt` (12–72 characters, at most 72 UTF-8 bytes) and start auth-service with the `local` profile and these additional arguments:
+
+```text
+--auth.bootstrap.admin.enabled=true
+--auth.bootstrap.admin.username=localadmin
+--auth.bootstrap.admin.password-file=file:./.secrets/admin_password.txt
+```
+
+Provisioning is disabled by default, refuses to promote existing USER accounts and does not reset existing administrator passwords. Remove the bootstrap arguments after provisioning.
+
+## Verification
+
+- 86 HTTP security smoke checks passed against packaged applications and isolated PostgreSQL databases, covering authentication, authorization, ownership and invalid JWT rejection.
+- Manual rate-limit checks demonstrated shared allowances across two gateway instances, independent account allowances, burst rejection and Redis-outage fail-open behavior.
+- Retry-After header integration verification remains outstanding. The existing automated User API tests require security-aware setup; a passing full regression suite is not claimed.
+
+Access tokens are not immediately revoked when accounts are disabled; they remain usable until expiry. The custom issuer does not implement a complete OAuth/OIDC authorization server. No load-test throughput or latency benchmark is claimed.

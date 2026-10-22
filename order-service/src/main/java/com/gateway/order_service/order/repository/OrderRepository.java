@@ -49,6 +49,20 @@ public class OrderRepository {
         return toOrder(jpaRepository.save(entity));
     }
 
+    public List<Order> findAllOwned(String subject) {
+        return jpaRepository.findAllByOwnerSubjectOrderById(subject).stream().map(this::toOrder).toList();
+    }
+
+    public Optional<Order> findOwnedById(Long id, String subject) {
+        return jpaRepository.findByIdAndOwnerSubject(id, subject).map(this::toOrder);
+    }
+
+    @Transactional
+    public Order createOwned(Long userId, Long productId, Integer quantity,
+                             BigDecimal unitPrice, String subject) {
+        return toOrder(jpaRepository.save(new OrderEntity(userId, productId, quantity, unitPrice, subject)));
+    }
+
     private Order toOrder(OrderEntity entity) {
         return new Order(
                 entity.getId(),

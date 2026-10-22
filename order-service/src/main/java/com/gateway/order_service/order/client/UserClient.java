@@ -1,5 +1,7 @@
 package com.gateway.order_service.order.client;
 
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.access.AccessDeniedException;
 
 import com.gateway.order_service.order.exception.DownStreamServiceException;
 import com.gateway.order_service.order.exception.OrderReferenceNotFoundException;
@@ -26,6 +28,12 @@ public class UserClient {
                     .retrieve()
                     .toBodilessEntity();
         }catch(RestClientResponseException ex){
+            if (ex.getStatusCode().value() == 401) {
+                throw new BadCredentialsException("Downstream authentication failed");
+            }
+            if (ex.getStatusCode().value() == 403) {
+                throw new AccessDeniedException("Access denied");
+            }
             if(ex.getStatusCode().value() == 404){
                 throw new OrderReferenceNotFoundException("User", userId);
             }

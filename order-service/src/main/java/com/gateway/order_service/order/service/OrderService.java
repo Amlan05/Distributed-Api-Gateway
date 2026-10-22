@@ -9,11 +9,14 @@ import com.gateway.order_service.order.dto.OrderResponse;
 import com.gateway.order_service.order.exception.OrderNotFoundException;
 import com.gateway.order_service.order.model.Order;
 import com.gateway.order_service.order.repository.OrderRepository;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import com.gateway.order_service.shared.security.CallerIdentity;
 
 @Service
+@PreAuthorize("hasAnyRole('USER', 'ADMIN')")
 public class OrderService {
 
     private final OrderRepository repository;
@@ -27,14 +30,16 @@ public class OrderService {
     }
 
     public List<OrderResponse> findAll(){
-        return repository.findAll()
+        return (CallerIdentity.isAdmin() ? repository.findAll()
+                : repository.findAllOwned(CallerIdentity.subject()))
                 .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     public OrderResponse findById(Long id){
-        Order order = repository.findById(id)
+        Order order = (CallerIdentity.isAdmin() ? repository.findById(id)
+                : repository.findOwnedById(id, CallerIdentity.subject()))
                 .orElseThrow(() -> new OrderNotFoundException(id));
 
         return toResponse(order);
@@ -45,11 +50,12 @@ public class OrderService {
 
         ProductDetails product = productClient.findById(request.productId());
 
-        Order order = repository.create(
+        Order order = repository.createOwned(
                 request.userId(),
                 product.id(),
                 request.quantity(),
-                product.price()
+                product.price(),
+                CallerIdentity.subject()
         );
 
         return toResponse(order);

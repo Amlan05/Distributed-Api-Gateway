@@ -1,0 +1,21 @@
+spring:
+  config:
+    import: "configtree:./.secrets/"
+
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5433/gateway_auth
+    username: auth_app
+    password: "${auth_password.txt}"
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+auth:
+  jwt:
+    issuer: http://localhost:8091
+    audience: gateway-api
+    access-token-ttl: 15m
+    key-store: file:./.secrets/auth-signing.p12
+    key-store-password: "${auth_keystore_password.txt}"
+    key-alias: auth-signing

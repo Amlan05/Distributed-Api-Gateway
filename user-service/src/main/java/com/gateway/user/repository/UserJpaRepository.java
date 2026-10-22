@@ -11,6 +11,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserJpaRepository extends JpaRepository<UserEntity, Long> {
 
+    Optional<UserEntity> findByIdAndOwnerSubject(Long id, String ownerSubject);
+
+    boolean existsByOwnerSubject(String ownerSubject);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from UserEntity u where u.id = :id")
     Optional<UserEntity> findByIdForUpdate(@Param("id") Long id);

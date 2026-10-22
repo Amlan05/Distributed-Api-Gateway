@@ -1,5 +1,5 @@
 package com.gateway.product_service.product.service;
-
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.gateway.product_service.product.dto.ProductRequest;
 import com.gateway.product_service.product.dto.ProductResponse;
 import com.gateway.product_service.product.exception.ProductNotFoundException;
@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
+@PreAuthorize("hasAnyRole('USER', 'ADMIN')")
 public class ProductService {
 
     private final ProductRepository repository;
@@ -33,6 +34,7 @@ public class ProductService {
 
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public ProductResponse create(ProductRequest request){
         Product product = repository.create(
                 request.name(),
@@ -42,6 +44,7 @@ public class ProductService {
         return toResponse(product);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public ProductResponse update(Long id, ProductRequest request){
         Product product = repository.update(
                 id,
@@ -52,6 +55,7 @@ public class ProductService {
         return toResponse(product);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public void deleteById(Long id){
         if(!repository.deleteById(id)){
             throw new ProductNotFoundException(id);

@@ -60,6 +60,40 @@ public class UserRepository {
         return true;
     }
 
+    public Optional<User> findOwnedById(Long id, String subject) {
+        return jpaRepository.findByIdAndOwnerSubject(id, subject).map(this::toUser);
+    }
+
+    public boolean hasProfile(String subject) {
+        return jpaRepository.existsByOwnerSubject(subject);
+    }
+
+    @Transactional
+    public User createOwned(String name, String email, String subject) {
+        return toUser(jpaRepository.saveAndFlush(new UserEntity(name, email, subject)));
+    }
+
+    @Transactional
+    public Optional<User> updateOwned(Long id, String name, String email, String subject) {
+        return jpaRepository.findByIdForUpdate(id)
+                .filter(entity -> subject.equals(entity.getOwnerSubject()))
+                .map(entity -> {
+                    entity.updateDetails(name, email);
+                    return toUser(entity);
+                });
+    }
+
+    @Transactional
+    public boolean deleteOwned(Long id, String subject) {
+        Optional<UserEntity> entity = jpaRepository.findByIdForUpdate(id)
+                .filter(existing -> subject.equals(existing.getOwnerSubject()));
+        if (entity.isEmpty()) {
+            return false;
+        }
+        jpaRepository.delete(entity.get());
+        return true;
+    }
+
     private User toUser(UserEntity entity) {
         return new User(
                 entity.getId(),

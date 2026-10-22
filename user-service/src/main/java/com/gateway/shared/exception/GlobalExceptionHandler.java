@@ -1,5 +1,7 @@
 package com.gateway.shared.exception;
 
+import org.springframework.security.access.AccessDeniedException;
+import com.gateway.user.exception.ProfileAlreadyExistsException;
 import java.net.URI;
 import java.util.Map;
 import java.util.TreeMap;
@@ -74,6 +76,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, "Request validation failed");
         problem.setProperty("errors", errors);
         return handleExceptionInternal(ex, problem, headers, status, request);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAccessDenied() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Access denied");
+    }
+
+    @ExceptionHandler(ProfileAlreadyExistsException.class)
+    public ProblemDetail handleProfileConflict() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "This account already has a user profile");
     }
 
     @ExceptionHandler(Exception.class)

@@ -17,18 +17,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.8.1
-    container_name: gateway-keycloak
-    command: [ "start-dev" ]
-    env_file:
-      - ./.secrets/keycloak.env
+  redis:
+    image: redis:8.2.10
+    container_name: gateway-redis
     ports:
-      - "127.0.0.1:8090:8080"
-    volumes:
-      - keycloak-data:/opt/keycloak/data
-
+      - "127.0.0.1:6380:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 secrets:
   postgres_password:
@@ -37,6 +36,3 @@ secrets:
 volumes:
   postgres-data:
     name: gateway-postgres-data
-  keycloak-data:
-    name: gateway-keycloak-data
-

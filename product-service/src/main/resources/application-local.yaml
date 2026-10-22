@@ -10,3 +10,14 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8091
+          jwk-set-uri: http://127.0.0.1:8091/.well-known/jwks.json
+          audiences:
+            - gateway-api
+          jws-algorithms:
+            - RS256

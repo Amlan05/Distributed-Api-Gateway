@@ -1,7 +1,12 @@
 package com.gateway.order_service.order.model;
 
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 
@@ -40,6 +45,10 @@ public class OrderEntity {
     )
     private BigDecimal totalPrice;
 
+    // Legacy orders have no owner and are visible only to administrators.
+    @Column(name = "owner_subject", length = 100, updatable = false)
+    private String ownerSubject;
+
     protected OrderEntity() {
 
     }
@@ -50,6 +59,12 @@ public class OrderEntity {
             Integer quantity,
             BigDecimal unitPrice
     ) {
+        this(userId, productId, quantity, unitPrice, null);
+    }
+
+    public OrderEntity(Long userId, Long productId, Integer quantity,
+                       BigDecimal unitPrice, String ownerSubject) {
+        this.ownerSubject = ownerSubject;
         this.userId = userId;
         this.productId = productId;
         this.quantity = quantity;
